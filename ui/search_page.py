@@ -6,9 +6,11 @@ from PySide6.QtWidgets import (
     QPushButton,
     QFrame,
     QDateEdit,
-    QComboBox
+    QComboBox,
+    QTableWidget,
+    QTableWidgetItem
 )
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, QTimer
 
 
 MISSION_DATA = {
@@ -51,7 +53,6 @@ class SearchPage(QWidget):
         main_layout.setContentsMargins(30, 30, 30, 30)
         main_layout.setSpacing(20)
 
-        # Header
         title = QLabel("Search Solar Data")
         title.setStyleSheet("""
             font-size: 28px;
@@ -70,7 +71,6 @@ class SearchPage(QWidget):
         main_layout.addWidget(title)
         main_layout.addWidget(subtitle)
 
-        # Search Card
         search_card = QFrame()
         search_card.setStyleSheet("""
             QFrame {
@@ -92,20 +92,14 @@ class SearchPage(QWidget):
                 background: white;
                 font-size: 14px;
             }
-
-            QComboBox::drop-down {
-                border: none;
-            }
         """
 
-        # Date Picker
         self.date_picker = QDateEdit()
         self.date_picker.setDate(QDate.currentDate())
         self.date_picker.setCalendarPopup(True)
         self.date_picker.setMinimumHeight(50)
         self.date_picker.setStyleSheet(field_style)
 
-        # Mission Dropdown
         self.mission_dropdown = QComboBox()
         self.mission_dropdown.addItems(
             sorted(MISSION_DATA.keys())
@@ -113,17 +107,14 @@ class SearchPage(QWidget):
         self.mission_dropdown.setMinimumHeight(50)
         self.mission_dropdown.setStyleSheet(field_style)
 
-        # Instrument Dropdown
         self.instrument_dropdown = QComboBox()
         self.instrument_dropdown.setMinimumHeight(50)
         self.instrument_dropdown.setStyleSheet(field_style)
 
-        # Parameter Dropdown
         self.parameter_dropdown = QComboBox()
         self.parameter_dropdown.setMinimumHeight(50)
         self.parameter_dropdown.setStyleSheet(field_style)
 
-        # Search Button
         self.search_button = QPushButton("Search")
         self.search_button.setMinimumHeight(50)
         self.search_button.setFixedWidth(160)
@@ -137,13 +128,8 @@ class SearchPage(QWidget):
                 font-size: 15px;
                 font-weight: bold;
             }
-
-            QPushButton:hover {
-                background-color: #5B4AF7;
-            }
         """)
 
-        # Add widgets in same row
         search_layout.addWidget(self.date_picker, 1)
         search_layout.addWidget(self.mission_dropdown, 1)
         search_layout.addWidget(self.instrument_dropdown, 1)
@@ -152,9 +138,8 @@ class SearchPage(QWidget):
 
         main_layout.addWidget(search_card)
 
-        # Help Card Placeholder
-        help_card = QFrame()
-        help_card.setStyleSheet("""
+        self.results_card = QFrame()
+        self.results_card.setStyleSheet("""
             QFrame {
                 background-color: white;
                 border-radius: 18px;
@@ -162,39 +147,27 @@ class SearchPage(QWidget):
             }
         """)
 
-        help_layout = QVBoxLayout(help_card)
+        results_layout = QVBoxLayout(self.results_card)
 
-        help_title = QLabel("How it works (Dismissible)")
-        help_title.setStyleSheet("""
+        self.results_status = QLabel("No results yet")
+        self.results_status.setStyleSheet("""
             font-size: 16px;
-            font-weight: bold;
-        """)
-
-        help_layout.addWidget(help_title)
-
-        main_layout.addWidget(help_card)
-
-        # Results Placeholder
-        results_card = QFrame()
-        results_card.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 18px;
-                border: 1px solid #E5E7EB;
-            }
-        """)
-
-        results_layout = QVBoxLayout(results_card)
-
-        results_label = QLabel("Results will appear here")
-        results_label.setStyleSheet("""
-            font-size: 18px;
             color: #6B7280;
         """)
 
-        results_layout.addWidget(results_label)
+        self.results_table = QTableWidget()
+        self.results_table.setColumnCount(4)
+        self.results_table.setHorizontalHeaderLabels([
+            "Filename",
+            "Mission",
+            "Instrument",
+            "Parameter"
+        ])
 
-        main_layout.addWidget(results_card, 1)
+        results_layout.addWidget(self.results_status)
+        results_layout.addWidget(self.results_table)
+
+        main_layout.addWidget(self.results_card, 1)
 
     def connect_signals(self):
         self.mission_dropdown.currentTextChanged.connect(
@@ -203,6 +176,10 @@ class SearchPage(QWidget):
 
         self.instrument_dropdown.currentTextChanged.connect(
             self.update_parameters
+        )
+
+        self.search_button.clicked.connect(
+            self.start_search
         )
 
     def update_instruments(self):
@@ -224,25 +201,10 @@ class SearchPage(QWidget):
 
         self.parameter_dropdown.clear()
 
-        # Safety checks
-        if not mission:
-            return
-
-        if not instrument:
-            self.parameter_dropdown.setEnabled(False)
-            self.parameter_dropdown.addItem(
-                "No additional parameters"
-            )
-            return
-
-        if mission not in MISSION_DATA:
+        if not mission or not instrument:
             return
 
         if instrument not in MISSION_DATA[mission]:
-            self.parameter_dropdown.setEnabled(False)
-            self.parameter_dropdown.addItem(
-                "No additional parameters"
-            )
             return
 
         parameters = MISSION_DATA[mission][instrument]
@@ -255,3 +217,59 @@ class SearchPage(QWidget):
             self.parameter_dropdown.addItem(
                 "No additional parameters"
             )
+
+    def start_search(self):
+        self.search_button.setText("Searching...")
+        self.search_button.setEnabled(False)
+
+        self.results_table.clearContents()
+        self.results_table.setRowCount(0)
+
+        self.results_status.setText(
+            "Searching solar data...\nPlease wait."
+        )
+        self.results_status.setStyleSheet("""
+            font-size: 16px;
+            color: #6B7280;
+            padding: 20px;
+        """)
+
+        QTimer.singleShot(
+            2000,
+            self.populate_results
+        )
+    def populate_results(self):
+        mission = self.mission_dropdown.currentText()
+        instrument = self.instrument_dropdown.currentText()
+        parameter = self.parameter_dropdown.currentText()
+
+        fake_results = [
+            "file_001.fits",
+            "file_002.fits",
+            "file_003.fits"
+        ]
+
+        self.results_table.setRowCount(
+            len(fake_results)
+        )
+
+        for row, file_name in enumerate(fake_results):
+            self.results_table.setItem(
+                row, 0, QTableWidgetItem(file_name)
+            )
+            self.results_table.setItem(
+                row, 1, QTableWidgetItem(mission)
+            )
+            self.results_table.setItem(
+                row, 2, QTableWidgetItem(instrument)
+            )
+            self.results_table.setItem(
+                row, 3, QTableWidgetItem(parameter)
+            )
+
+        self.results_status.setText(
+            f"{len(fake_results)} results found"
+        )
+
+        self.search_button.setText("Search")
+        self.search_button.setEnabled(True)
