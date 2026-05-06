@@ -1,0 +1,14 @@
+**pycache**/
+*.pyc
+*.pyo
+*.pyd
+
+venv/
+.env
+
+storage/downloads/
+storage/cache/
+
+*.db
+
+.vscode/
