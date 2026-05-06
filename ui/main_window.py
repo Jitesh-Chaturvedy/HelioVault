@@ -65,8 +65,11 @@ class MainWindow(QWidget):
 
         self.stack = QStackedWidget()
 
-        self.search_page = SearchPage()
+        
         self.downloads_page = DownloadsPage()
+        self.search_page = SearchPage(
+            download_page=self.downloads_page
+        )
         self.library_page = LibraryPage()
         self.settings_page = SettingsPage()
 
